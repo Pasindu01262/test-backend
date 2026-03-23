@@ -1,0 +1,13 @@
+# Render Blueprint — deploy API from GitHub/GitLab
+services:
+  - type: web
+    name: handbag-shop-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      # Add in Render dashboard: MONGODB_URI, JWT_SECRET, CLIENT_URL, STRIPE_*, etc.

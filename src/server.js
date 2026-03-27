@@ -21,54 +21,68 @@ import chatRoutes from './routes/chatRoutes.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
-// Trust proxy on Render/Railway for rate limit / HTTPS
+// Trust proxy (needed on Render/Railway for rate limit / HTTPS)
 app.set('trust proxy', 1);
 
+// Connect to MongoDB
 await connectDB();
 
-// Stripe webhook must use raw body
+// Stripe webhook (must use raw body)
 app.post(
   '/api/payments/webhook',
   express.raw({ type: 'application/json' }),
   handleStripeWebhook
 );
 
-// CORS
-// In dev, allow any localhost origin so requests still work if Vite picks a different port.
-// In production, restrict to CLIENT_URL.
-const isDev = (process.env.NODE_ENV || '').toLowerCase() !== 'production';
+// ===== CORS =====
+// Allow localhost for dev and Vercel frontend in production
+const allowedOrigins = [
+  'http://localhost:5173', // local dev
+  'https://test-seven-nu-96.vercel.app', // Vercel frontend
+];
+
 app.use(
   cors({
-    origin: isDev
-      ? true
-      : process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true); // allow Postman/server requests
+      if (!allowedOrigins.includes(origin)) {
+        return callback(
+          new Error(
+            'The CORS policy for this site does not allow access from the specified Origin.'
+          ),
+          false
+        );
+      }
+      return callback(null, true);
+    },
     credentials: true,
   })
 );
 
+// ===== Security & Middleware =====
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(mongoSanitize()); // prevent NoSQL injections
 
-// Mitigate NoSQL injection; MongoDB not SQL but sanitizes $ operators in user input
-app.use(mongoSanitize());
-
-// Basic rate limiting for auth & API
+// ===== Rate Limiting =====
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
 });
 app.use('/api/', limiter);
 
-// Uploaded product images
+// ===== Static Uploads =====
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// ===== Health Check =====
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'handbag-shop-api' });
 });
 
+// ===== Routes =====
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/categories', categoryRoutes);
@@ -78,8 +92,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/chat', chatRoutes);
 
-// XSS: React escapes output; we validate/sanitize inputs on routes (express-validator escape where needed)
-
+// ===== Error Handler =====
 app.use((err, _req, res, _next) => {
   console.error(err);
   const status = err.status || 500;
@@ -88,7 +101,8 @@ app.use((err, _req, res, _next) => {
   });
 });
 
+// ===== Start Server =====
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`API listening on port ${PORT}`);
-});
+});;

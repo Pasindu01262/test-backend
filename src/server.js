@@ -38,7 +38,7 @@ app.post(
 // Allow localhost for dev and Vercel frontend in production
 const allowedOrigins = [
   'http://localhost:5173', // local dev
-  'https://test-seven-nu-96.vercel.app', // Vercel frontend
+  'https://test-frontend-nu-six.vercel.app/', // Vercel frontend
 ];
 
 app.use(
